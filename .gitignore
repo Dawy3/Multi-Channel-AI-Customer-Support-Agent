@@ -1,0 +1,42 @@
+# Secrets — NEVER upload to GitHub
+.env
+
+# Local database
+*.db
+*.sqlite
+*.sqlite3
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# Knowledge (private business files)
+knowledge/*
+!knowledge/.gitkeep
+
+# Session state
+config/session.yaml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Docker
+.dockerignore
+
+# Node (if used for Claude Code)
+node_modules/
