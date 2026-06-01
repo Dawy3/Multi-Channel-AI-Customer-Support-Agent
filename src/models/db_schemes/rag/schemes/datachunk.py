@@ -1,6 +1,6 @@
 from .rag_base import SQLAlchemyBase
 from sqlalchemy import Column, Integer, DateTime, String, func, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID, JSONB, TSVECTOR
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy import Index
 from pydantic import BaseModel
@@ -17,7 +17,6 @@ class DataChunk(SQLAlchemyBase):
     chunk_text = Column(String, nullable=False)
     chunk_metadata = Column(JSONB, nullable=True)
     chunk_order = Column(Integer, nullable=False)
-    chunk_text_search = Column(TSVECTOR, nullable=True)
 
     chunk_project_id = Column(Integer, ForeignKey("projects.project_id"), nullable=False)
     chunk_asset_id = Column(Integer, ForeignKey("assets.asset_id"), nullable=False)
@@ -32,10 +31,10 @@ class DataChunk(SQLAlchemyBase):
     __table_args__ = (
         Index("ix_chunk_project_id", chunk_project_id),
         Index("ix_chunk_asset_id", chunk_asset_id),
-        Index("ix_chunk_text_search", chunk_text_search, postgresql_using="gin"),
     )
     
 
 class RetrievedDocument(BaseModel):
     text: str
     score: float
+    chunk_id: int = None

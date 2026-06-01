@@ -14,8 +14,10 @@ class QdrantDB(VectorDBInterface):
         self.db_client = db_client
         self.distance_method = None
         self.default_vector_size = default_vector_size
-        
-        
+        # Payload key under which chunk text is stored (see insert_many)
+        self.text_payload_key = "texts"
+
+
         if distance_method == DistanceMethodEnums.COSINE.value:
             self.distance_method = models.Distance.COSINE
         elif distance_method == DistanceMethodEnums.DOT.value:
@@ -55,6 +57,19 @@ class QdrantDB(VectorDBInterface):
             _ = self.client.create_collection(
                 collection_name=collection_name,
                 vectors_config= models.VectorParams(size=embedding_size, distance= self.distance_method)
+            )
+
+            # Payload text index enables lexical (full-text) MatchText search.
+            # MULTILINGUAL tokenizer handles ar / en / es uniformly.
+            self.client.create_payload_index(
+                collection_name=collection_name,
+                field_name=self.text_payload_key,
+                field_schema=models.TextIndexParams(
+                    type=models.TextIndexType.TEXT,
+                    tokenizer=models.TokenizerType.MULTILINGUAL,
+                    min_token_len=2,
+                    lowercase=True,
+                ),
             )
             return True
         return False
@@ -124,20 +139,58 @@ class QdrantDB(VectorDBInterface):
         return True
             
     async def search_by_vector(self, collection_name: str, vector: list, limit: int= 5):
-        
+
         results = self.client.search(
             collection_name=collection_name,
             query_vector=vector,
             limit= limit
         )
-        
+
         if not results or len(results) == 0:
             return None
-        
+
         return [
-            RetrievedDocument(**{
-                "score" : result.score,
-                "text" : result.payload["texts"]
-            })
+            RetrievedDocument(
+                score= result.score,
+                text= result.payload[self.text_payload_key],
+                chunk_id= result.id,
+            )
             for result in results
+        ]
+
+    async def search_by_text(self, collection_name: str, text: str, limit: int = 5):
+
+        if not self.is_collection_existed(collection_name):
+            self.logger.error(f"Can not search non-existed collection {collection_name}")
+            return None
+
+        # MatchText is a filter, not a scorer: it selects matching points but
+        # does not rank them by relevance. We keep insertion/scroll order and let
+        # RRF use the rank position. (True lexical scoring in Qdrant needs sparse
+        # vectors / BM25, which this provider does not set up.)
+        records, _ = self.client.scroll(
+            collection_name=collection_name,
+            scroll_filter=models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key=self.text_payload_key,
+                        match=models.MatchText(text=text),
+                    )
+                ]
+            ),
+            limit=limit,
+            with_payload=True,
+        )
+
+        if not records or len(records) == 0:
+            return None
+
+        # Positional score (descending) so ordering is preserved for fusion.
+        return [
+            RetrievedDocument(
+                score= float(limit - i),
+                text= record.payload[self.text_payload_key],
+                chunk_id= record.id,
+            )
+            for i, record in enumerate(records)
         ]

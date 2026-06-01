@@ -1,14 +1,14 @@
 from .base_controller import BaseController
-from models.db_schemes import Project, DataChunk
+from models.db_schemes import Project, DataChunk, RetrievedDocument
 from stores.llm.llm_enums import DocumentTypeEnum
 from typing import List
 import json
 
 class NLPController(BaseController):
-    
+
     def __init__(self, vectordb_client, generation_client, embedding_client, template_parser):
         super().__init__()
-        
+
         self.embedding_client = embedding_client
         self.vectordb_client = vectordb_client
         self.generation_client = generation_client
@@ -88,15 +88,84 @@ class NLPController(BaseController):
         
         if not results:
             return False
-        
+
         return results
-        
+
+    def _reciprocal_rank_fusion(self, result_lists: List[List[RetrievedDocument]],
+                                limit: int, k: int = 60) -> List[RetrievedDocument]:
+        """Combine several ranked result lists into one using Reciprocal Rank Fusion.
+
+        RRF score for a document = sum over each list it appears in of 1 / (k + rank),
+        where rank is 1-based. k=60 is the standard constant; it dampens the
+        influence of any single high rank so the lists blend smoothly. Documents
+        are matched across lists by chunk_id (falling back to text).
+        """
+        fused_scores = {}
+        docs_by_key = {}
+
+        for results in result_lists:
+            if not results:
+                continue
+            for rank, doc in enumerate(results, start=1):
+                key = doc.chunk_id if doc.chunk_id is not None else doc.text
+                fused_scores[key] = fused_scores.get(key, 0.0) + 1.0 / (k + rank)
+                if key not in docs_by_key:
+                    docs_by_key[key] = doc
+
+        ranked_keys = sorted(fused_scores, key=fused_scores.get, reverse=True)
+
+        return [
+            RetrievedDocument(
+                text= docs_by_key[key].text,
+                score= fused_scores[key],
+                chunk_id= docs_by_key[key].chunk_id,
+            )
+            for key in ranked_keys[:limit]
+        ]
+
+    async def hybrid_search_collection(self, project: Project, text: str, limit: int = 10):
+        """Hybrid retrieval: semantic (vector) + lexical (full-text), fused with RRF."""
+
+        collection_name = self.create_collection_name(project_id=project.project_id)
+
+        # Semantic half: embed the query, then vector search
+        query_vector = None
+        vectors = self.embedding_client.embed_text(text, DocumentTypeEnum.QUERY.value)
+        if isinstance(vectors, list) and len(vectors) > 0:
+            query_vector = vectors[0]
+
+        semantic_results = []
+        if query_vector:
+            semantic_results = await self.vectordb_client.search_by_vector(
+                collection_name=collection_name,
+                vector=query_vector,
+                limit=limit,
+            ) or []
+
+        # Lexical half: full-text search over the same collection
+        lexical_results = await self.vectordb_client.search_by_text(
+            collection_name=collection_name,
+            text=text,
+            limit=limit,
+        ) or []
+
+        # Fuse both rankings
+        fused = self._reciprocal_rank_fusion(
+            result_lists=[semantic_results, lexical_results],
+            limit=limit,
+        )
+
+        if not fused:
+            return False
+
+        return fused
+
     async def answer_rag_question(self, project: Project, query: str, limit: int=10):
         
         answer, full_prompt, chat_history = None, None, None
         
-        # Step1: Retrieve related document 
-        retrieved_documents = await self.search_vector_db_collection(
+        # Step1: Retrieve related documents (hybrid: semantic + lexical, RRF-fused)
+        retrieved_documents = await self.hybrid_search_collection(
             project=project,
             text= query,
             limit=limit,

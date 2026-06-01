@@ -23,6 +23,11 @@ class PGVectorProvider(VectorDBInterface):
         
         self.pgvector_table_prefix = PgVectorTableSchemeEnums._PREFIX.value
         self.distance_method = distance_method
+        # Text-search configuration used for full-text (lexical) search.
+        # 'simple' = no stemming / no stop-words, so it works uniformly across
+        # languages (ar / en / es) instead of assuming English. The SAME config
+        # MUST be used when building the tsvector and when parsing the query.
+        self.text_search_config = "simple"
         self.logger = logging.getLogger("uvicorn")
         self.default_index_name = lambda collection_name: f"{collection_name}_vector_idx"
         
@@ -128,12 +133,22 @@ class PGVectorProvider(VectorDBInterface):
                             f'{PgVectorTableSchemeEnums.VECTOR.value} vector({embedding_size}), '
                             f'{PgVectorTableSchemeEnums.METADATA.value} jsonb DEFAULT \'{{}}\', '
                             f'{PgVectorTableSchemeEnums.CHUNK_ID.value} integer, '
+                            # Auto-maintained tsvector for lexical (full-text) search; no trigger needed
+                            f"{PgVectorTableSchemeEnums.TEXT_TSV.value} tsvector "
+                            f"GENERATED ALWAYS AS (to_tsvector('{self.text_search_config}', {PgVectorTableSchemeEnums.TEXT.value})) STORED, "
                             f'FOREIGN KEY ({PgVectorTableSchemeEnums.CHUNK_ID.value}) REFERENCES chunks(chunk_id)'
                         ")"
                     )
                     await session.execute(t)
+
+                    # GIN index to make @@ tsquery lookups fast
+                    text_index_sql = sql_text(
+                        f"CREATE INDEX {collection_name}_text_tsv_idx "
+                        f"ON {collection_name} USING gin ({PgVectorTableSchemeEnums.TEXT_TSV.value})"
+                    )
+                    await session.execute(text_index_sql)
                     await session.commit()
-                    
+
             return True
         
         return False
@@ -286,19 +301,53 @@ class PGVectorProvider(VectorDBInterface):
         async with self.db_client() as session:
             async with session.begin():
                 t = sql_text(
-                            f" SELECT {PgVectorTableSchemeEnums.TEXT.value} as text, 1 - ({PgVectorTableSchemeEnums.VECTOR.value} <=> :vector) as score"
+                            f" SELECT {PgVectorTableSchemeEnums.TEXT.value} as text, {PgVectorTableSchemeEnums.CHUNK_ID.value} as chunk_id, 1 - ({PgVectorTableSchemeEnums.VECTOR.value} <=> :vector) as score"
                             f" FROM {collection_name}"
                             " ORDER BY score DESC "
                             f" LIMIT {limit}"
                         )
                 result = await session.execute(t, {"vector": vector})
-                
+
                 records = result.fetchall()
-                
+
                 return [
                     RetrievedDocument(
                         text= r.text,
-                        score= r.score
+                        score= r.score,
+                        chunk_id= r.chunk_id
+                    )
+                    for r in records
+                ]
+
+    async def search_by_text(self, collection_name: str, text: str, limit: int):
+
+        is_collection_existed = await self.is_collection_existed(collection_name)
+        if not is_collection_existed:
+            self.logger.error(f"Can not search non-existed collection {collection_name}")
+            return False
+
+        async with self.db_client() as session:
+            async with session.begin():
+                # plainto_tsquery tokenises the raw query safely; ts_rank orders by relevance.
+                # Same config as the generated tsvector column (see __init__).
+                t = sql_text(
+                    f" SELECT {PgVectorTableSchemeEnums.TEXT.value} as text,"
+                    f" {PgVectorTableSchemeEnums.CHUNK_ID.value} as chunk_id,"
+                    f" ts_rank({PgVectorTableSchemeEnums.TEXT_TSV.value}, plainto_tsquery('{self.text_search_config}', :query)) as score"
+                    f" FROM {collection_name}"
+                    f" WHERE {PgVectorTableSchemeEnums.TEXT_TSV.value} @@ plainto_tsquery('{self.text_search_config}', :query)"
+                    " ORDER BY score DESC"
+                    f" LIMIT {limit}"
+                )
+                result = await session.execute(t, {"query": text})
+
+                records = result.fetchall()
+
+                return [
+                    RetrievedDocument(
+                        text= r.text,
+                        score= r.score,
+                        chunk_id= r.chunk_id
                     )
                     for r in records
                 ]
