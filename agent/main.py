@@ -13,9 +13,9 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import PlainTextResponse
 from dotenv import load_dotenv
 
-from agent.brain import generar_respuesta
-from agent.memory import inicializar_db, guardar_mensaje, obtener_historial
-from agent.providers import obtener_proveedor
+from agent.brain import generate_reply
+from agent.memory import init_db, save_message, get_history
+from agent.providers import get_provider
 
 load_dotenv()
 
@@ -26,17 +26,17 @@ logging.basicConfig(level=log_level)
 logger = logging.getLogger("agentkit")
 
 # WhatsApp provider (configured in .env via WHATSAPP_PROVIDER)
-proveedor = obtener_proveedor()
+provider = get_provider()
 PORT = int(os.getenv("PORT", 8000))
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize the database when the server starts."""
-    await inicializar_db()
+    await init_db()
     logger.info("Database initialized")
     logger.info(f"AgentKit server running on port {PORT}")
-    logger.info(f"WhatsApp provider: {proveedor.__class__.__name__}")
+    logger.info(f"WhatsApp provider: {provider.__class__.__name__}")
     yield
 
 
@@ -54,11 +54,11 @@ async def health_check():
 
 
 @app.get("/webhook")
-async def webhook_verificacion(request: Request):
+async def webhook_verification(request: Request):
     """GET webhook verification (required by Meta Cloud API, no-op for others)."""
-    resultado = await proveedor.validar_webhook(request)
-    if resultado is not None:
-        return PlainTextResponse(str(resultado))
+    result = await provider.validate_webhook(request)
+    if result is not None:
+        return PlainTextResponse(str(result))
     return {"status": "ok"}
 
 
@@ -66,34 +66,34 @@ async def webhook_verificacion(request: Request):
 async def webhook_handler(request: Request):
     """
     Receives WhatsApp messages via the configured provider.
-    Processes the message, generates a reply with Claude, and sends it back.
+    Processes the message, generates a reply with the model, and sends it back.
     """
     try:
         # Parse webhook — the provider normalizes the format
-        mensajes = await proveedor.parsear_webhook(request)
+        messages = await provider.parse_webhook(request)
 
-        for msg in mensajes:
+        for msg in messages:
             # Ignore own or empty messages
-            if msg.es_propio or not msg.texto:
+            if msg.is_own or not msg.text:
                 continue
 
-            logger.info(f"Message from {msg.telefono}: {msg.texto}")
+            logger.info(f"Message from {msg.phone}: {msg.text}")
 
             # Get history BEFORE saving the current message
             # (brain.py appends the current message, avoiding duplicates)
-            historial = await obtener_historial(msg.telefono)
+            history = await get_history(msg.phone)
 
-            # Generate reply with Claude
-            respuesta = await generar_respuesta(msg.texto, historial)
+            # Generate reply with the model
+            reply = await generate_reply(msg.text, history)
 
             # Save the user's message AND the agent's reply to memory
-            await guardar_mensaje(msg.telefono, "user", msg.texto)
-            await guardar_mensaje(msg.telefono, "assistant", respuesta)
+            await save_message(msg.phone, "user", msg.text)
+            await save_message(msg.phone, "assistant", reply)
 
             # Send the reply over WhatsApp via the provider
-            await proveedor.enviar_mensaje(msg.telefono, respuesta)
+            await provider.send_message(msg.phone, reply)
 
-            logger.info(f"Reply to {msg.telefono}: {respuesta}")
+            logger.info(f"Reply to {msg.phone}: {reply}")
 
         return {"status": "ok"}
 
