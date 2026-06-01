@@ -1,0 +1,32 @@
+fastapi==0.110.2
+uvicorn[standard]==0.29.0
+python-multipart==0.0.9 # Uploading files for fastapi
+python-dotenv==1.0.1
+pydantic-settings==2.2.1
+aiofiles==23.2.1
+langchain==0.1.20
+PyMuPDF==1.24.3
+openai==1.75.0
+cohere==5.5.8
+qdrant-client==1.10.1
+motor==3.4.0
+pymongo==4.5.0
+SQLAlchemy==2.0.36
+asyncpg==0.30.0
+alembic==1.14.0     # Alembic basicaly turn python code data(SQLAlchemy) to tables on the DB(PostgreSQL)
+psycopg2==2.9.10    # to run Alembic
+pgvector==0.4.0
+nltk==3.9.1
+
+# Monitoring and metrics
+prometheus-client==0.21.1
+starlette-exporter==0.23.0
+
+# Health checks
+fastapi-health==0.4.0
+
+# OCR
+mistralai
+google-genai
+cv2-rgb
+pillow

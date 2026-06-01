@@ -1,0 +1,39 @@
+APP_NAME="Billingual-RAG"
+APP_VERSION="0.1"
+
+FILE_ALLOWED_TYPES=["text/plain", "application/pdf"] 
+FILE_MAX_SIZE=10
+FILE_DEFAULT_CHUNK_SIZE=512000 # 512KB
+
+POSTGRES_USERNAME="postgres"
+POSTGRES_PASSWORD="minirag2222"
+POSTGRES_HOST="localhost"
+POSTGRES_PORT=5432
+POSTGRES_MAIN_DATABASE="minirag"
+
+# ================================= LLM Config ================================
+GENERATION_BACKEND = "OPENAI"
+EMBEDDING_BACKEND = "COHERE"
+
+OPENAI_API_KEY="your_openai_api_key"
+OPENAI_BASE_URL=
+COHERE_API_KEY="your_cohere_api_key"
+
+
+GENERATION_MODEL_ID="gpt-4o-mini"
+EMBEDDING_MODEL_ID="embed-multilingual-light-v3.0"
+EMBEDDING_MODEL_SIZE=384
+
+INPUT_DEFAULT_MAX_CHARACTERS=1024
+GENERATION_DEFAULT_MAX_TOKENS=200
+GENERATION_DEFAULT_TEMPERATURE=0.1
+
+# ================================= VectorDB Config ================================
+VECTOR_DB_BACKEND = "QDRANT"
+VECTOR_DB_PATH = "qdrant_db"
+VECTOR_DB_DISTANCE_METHOD = "cosine"
+VECTOR_DB_PGVEC_INDEX_THRESHOLD=100
+# ================================= Template Configs ================================
+PRIMARY_LANG= "ar"
+DEFAULT_LANG = "en"
+

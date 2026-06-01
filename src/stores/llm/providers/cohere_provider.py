@@ -1,0 +1,108 @@
+from stores.llm.llm_interface import LLMInterface
+from stores.llm.llm_enums import CohereEnums, DocumentTypeEnum
+import cohere
+import logging
+from typing import List, Union
+import os
+
+
+
+
+class CohereProvider(LLMInterface):
+    
+    def __init__(self, api_key: str,
+                        default_input_max_char: int=1000,
+                        default_generation_max_output_tokens: int=1000,
+                        default_temp: float=0.1,
+                        chat_history_limit: int = None):
+        self.api_key = api_key
+        
+        self.default_temp = default_temp
+        self.defalt_input_max_char = default_input_max_char 
+        self.default_generation_max_output_tokens = default_generation_max_output_tokens 
+        
+        # We could change it in RunTime so it's better to assign with none in case we need to use different generation/embedding model and client
+        self.generation_model_id = None
+        
+        self.embedding_model_id = None
+        self.embedding_size = None
+        
+        self.client = cohere.Client(api_key=self.api_key)
+        
+        self.enums = CohereEnums
+        self.logger = logging.getLogger(__name__)
+        
+        
+    def set_generation_model(self, model_id: str):
+        self.generation_model_id = model_id
+        
+    def set_embedding_model(self, model_id: str, embedding_size: int):
+        self.embedding_model_id = model_id
+        self.embedding_size = embedding_size
+        
+    def _process_text(self, text: str):
+        return text[:self.defalt_input_max_char].strip()
+    
+    def generate_text(self, prompt: str, chat_history: list=[], max_output_tokens: int=None, 
+                      temp: float = None ):
+        if not self.client:
+            self.logger.error("CoHere client was not set")
+            return None
+        
+        if not self.generation_model_id:
+            self.logger.error("Generation model for CoHere was not set")
+            return None
+        
+        max_output_tokens = max_output_tokens if max_output_tokens  else self.default_generation_max_output_tokens
+        temp = temp if temp else self.default_temp
+        
+        response = self.client.chat(
+            model = self.generation_model_id,
+            chat_history = chat_history,
+            message = self.construct_prompt(prompt),
+            temperature = temp,
+            max_tokens = max_output_tokens
+        )
+        
+        if not response or not response.text:
+            self.logger.error("Error while generating text with CoHere")
+            return None
+        
+        return response.text
+     
+            
+    
+    def embed_text(self, text: Union[str, List[str]], document_type: str = None):
+        if not self.client:
+            self.logger.error("CoHere client was not set")
+            return None
+        
+        if isinstance(text, str):
+            text= [text]
+        
+        if not self.embedding_model_id:
+            self.logger.error("Embedding model for CoHere was not set")
+            return None
+        
+        input_type = CohereEnums.DOCUMENT.value
+        if document_type == DocumentTypeEnum.QUERY.value:
+            input_type = CohereEnums.QUERY.value
+        
+        response = self.client.embed(
+            model = self.embedding_model_id,
+            texts = [ self._process_text(t) for t in text],
+            input_type=input_type,
+            embedding_types = ['float'],
+        )
+
+        if not response or not response.embeddings or not response.embeddings.float:
+            self.logger.error("Error while embedding text with CoHere")
+            return None
+        
+        return [f for f in response.embeddings.float]
+    
+    def construct_prompt(self, prompt: str, role: str):
+        return {
+            "role" : role,
+            "text" : prompt
+        }  
