@@ -17,7 +17,7 @@ from datetime import datetime
 logger = logging.getLogger("agentkit")
 
 
-def cargar_info_negocio() -> dict:
+def load_business_info() -> dict:
     """Load business information from business.yaml."""
     try:
         with open("config/business.yaml", "r", encoding="utf-8") as f:
@@ -27,41 +27,41 @@ def cargar_info_negocio() -> dict:
         return {}
 
 
-def obtener_horario() -> dict:
+def get_business_hours() -> dict:
     """Return the business hours. Arab world is open 24/7."""
-    info = cargar_info_negocio()
+    info = load_business_info()
     return {
-        "horario": info.get("negocio", {}).get("horario", "Open 24/7"),
-        "esta_abierto": True,  # Arab world is always open
+        "hours": info.get("business", {}).get("hours", "Open 24/7"),
+        "is_open": True,  # Arab world is always open
     }
 
 
-def buscar_en_knowledge(consulta: str) -> str:
+def search_knowledge(query: str) -> str:
     """
     Search for relevant information in the /knowledge files.
     Returns the most relevant content found.
     """
-    resultados = []
+    results = []
     knowledge_dir = "knowledge"
 
     if not os.path.exists(knowledge_dir):
         return "No knowledge files available."
 
-    for archivo in os.listdir(knowledge_dir):
-        ruta = os.path.join(knowledge_dir, archivo)
-        if archivo.startswith(".") or not os.path.isfile(ruta):
+    for file_name in os.listdir(knowledge_dir):
+        path = os.path.join(knowledge_dir, file_name)
+        if file_name.startswith(".") or not os.path.isfile(path):
             continue
         try:
-            with open(ruta, "r", encoding="utf-8") as f:
-                contenido = f.read()
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read()
                 # Simple text-match search
-                if consulta.lower() in contenido.lower():
-                    resultados.append(f"[{archivo}]: {contenido[:500]}")
+                if query.lower() in content.lower():
+                    results.append(f"[{file_name}]: {content[:500]}")
         except (UnicodeDecodeError, IOError):
             continue
 
-    if resultados:
-        return "\n---\n".join(resultados)
+    if results:
+        return "\n---\n".join(results)
     return "I couldn't find specific information about that in my files."
 
 
@@ -72,102 +72,102 @@ def buscar_en_knowledge(consulta: str) -> str:
 # ════════════════════════════════════════════════════════════
 
 # Simple in-memory stores (replace with a real DB in production)
-_citas: dict[str, list[dict]] = {}
+_appointments: dict[str, list[dict]] = {}
 _leads: dict[str, dict] = {}
-_carritos: dict[str, list[dict]] = {}
+_carts: dict[str, list[dict]] = {}
 _tickets: dict[str, dict] = {}
 
 
 # ── Appointments / reservations ─────────────────────────────
-def reservar_cita(telefono: str, fecha: str, hora: str, motivo: str = "styling consultation") -> dict:
+def book_appointment(phone: str, date: str, time: str, reason: str = "styling consultation") -> dict:
     """Book an appointment/reservation for a customer."""
-    cita = {
+    appointment = {
         "id": str(uuid.uuid4())[:8],
-        "fecha": fecha,
-        "hora": hora,
-        "motivo": motivo,
-        "estado": "confirmed",
-        "creada": datetime.utcnow().isoformat(),
+        "date": date,
+        "time": time,
+        "reason": reason,
+        "status": "confirmed",
+        "created": datetime.utcnow().isoformat(),
     }
-    _citas.setdefault(telefono, []).append(cita)
-    logger.info(f"Appointment booked for {telefono}: {cita['id']}")
-    return cita
+    _appointments.setdefault(phone, []).append(appointment)
+    logger.info(f"Appointment booked for {phone}: {appointment['id']}")
+    return appointment
 
 
-def cancelar_cita(telefono: str, cita_id: str) -> bool:
+def cancel_appointment(phone: str, appointment_id: str) -> bool:
     """Cancel a previously booked appointment."""
-    citas = _citas.get(telefono, [])
-    for cita in citas:
-        if cita["id"] == cita_id:
-            cita["estado"] = "cancelled"
+    appointments = _appointments.get(phone, [])
+    for appointment in appointments:
+        if appointment["id"] == appointment_id:
+            appointment["status"] = "cancelled"
             return True
     return False
 
 
 # ── Leads & sales ───────────────────────────────────────────
-def registrar_lead(telefono: str, nombre: str, interes: str) -> dict:
+def register_lead(phone: str, name: str, interest: str) -> dict:
     """Register a sales lead so the team can follow up."""
     lead = {
-        "telefono": telefono,
-        "nombre": nombre,
-        "interes": interes,
-        "estado": "new",
-        "creado": datetime.utcnow().isoformat(),
+        "phone": phone,
+        "name": name,
+        "interest": interest,
+        "status": "new",
+        "created": datetime.utcnow().isoformat(),
     }
-    _leads[telefono] = lead
-    logger.info(f"Lead registered: {telefono} — {interes}")
+    _leads[phone] = lead
+    logger.info(f"Lead registered: {phone} — {interest}")
     return lead
 
 
-def escalar_a_vendedor(telefono: str, contexto: str) -> dict:
+def escalate_to_salesperson(phone: str, context: str) -> dict:
     """Flag a conversation so a human salesperson can take over."""
-    logger.info(f"Escalated to salesperson: {telefono} — {contexto}")
-    return {"telefono": telefono, "contexto": contexto, "estado": "escalated"}
+    logger.info(f"Escalated to salesperson: {phone} — {context}")
+    return {"phone": phone, "context": context, "status": "escalated"}
 
 
 # ── Orders ──────────────────────────────────────────────────
-def agregar_al_carrito(telefono: str, producto: str, talla: str, cantidad: int = 1) -> list[dict]:
+def add_to_cart(phone: str, product: str, size: str, quantity: int = 1) -> list[dict]:
     """Add an item (with size) to the customer's cart."""
-    item = {"producto": producto, "talla": talla, "cantidad": cantidad}
-    _carritos.setdefault(telefono, []).append(item)
-    return _carritos[telefono]
+    item = {"product": product, "size": size, "quantity": quantity}
+    _carts.setdefault(phone, []).append(item)
+    return _carts[phone]
 
 
-def ver_carrito(telefono: str) -> list[dict]:
+def view_cart(phone: str) -> list[dict]:
     """Return the current items in the customer's cart."""
-    return _carritos.get(telefono, [])
+    return _carts.get(phone, [])
 
 
-def confirmar_pedido(telefono: str, direccion_envio: str) -> dict:
+def confirm_order(phone: str, shipping_address: str) -> dict:
     """Confirm the order with the cart contents and a shipping address."""
-    items = _carritos.get(telefono, [])
-    pedido = {
+    items = _carts.get(phone, [])
+    order = {
         "id": str(uuid.uuid4())[:8],
         "items": items,
-        "direccion_envio": direccion_envio,
-        "estado": "confirmed",
-        "creado": datetime.utcnow().isoformat(),
+        "shipping_address": shipping_address,
+        "status": "confirmed",
+        "created": datetime.utcnow().isoformat(),
     }
-    _carritos[telefono] = []  # empty the cart after confirming
-    logger.info(f"Order confirmed for {telefono}: {pedido['id']}")
-    return pedido
+    _carts[phone] = []  # empty the cart after confirming
+    logger.info(f"Order confirmed for {phone}: {order['id']}")
+    return order
 
 
 # ── Post-sale support ───────────────────────────────────────
-def crear_ticket(telefono: str, problema: str) -> dict:
+def create_ticket(phone: str, issue: str) -> dict:
     """Create a post-sale support ticket."""
     ticket = {
         "id": str(uuid.uuid4())[:8],
-        "telefono": telefono,
-        "problema": problema,
-        "estado": "open",
-        "creado": datetime.utcnow().isoformat(),
+        "phone": phone,
+        "issue": issue,
+        "status": "open",
+        "created": datetime.utcnow().isoformat(),
     }
     _tickets[ticket["id"]] = ticket
     logger.info(f"Support ticket created: {ticket['id']}")
     return ticket
 
 
-def consultar_ticket(ticket_id: str) -> dict:
+def get_ticket(ticket_id: str) -> dict:
     """Look up the status of a support ticket."""
     return _tickets.get(ticket_id, {"error": "Ticket not found"})

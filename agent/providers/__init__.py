@@ -6,21 +6,21 @@ Picks the WhatsApp provider based on the WHATSAPP_PROVIDER variable in .env.
 """
 
 import os
-from agent.providers.base import ProveedorWhatsApp
+from agent.providers.base import WhatsAppProvider
 
 
-def obtener_proveedor() -> ProveedorWhatsApp:
+def get_provider() -> WhatsAppProvider:
     """Return the WhatsApp provider configured in .env."""
-    proveedor = os.getenv("WHATSAPP_PROVIDER", "").lower()
+    provider = os.getenv("WHATSAPP_PROVIDER", "").lower()
 
-    if not proveedor:
+    if not provider:
         raise ValueError("WHATSAPP_PROVIDER not set in .env. Use: meta or twilio")
 
-    if proveedor == "meta":
-        from agent.providers.meta import ProveedorMeta
-        return ProveedorMeta()
-    elif proveedor == "twilio":
-        from agent.providers.twilio import ProveedorTwilio
-        return ProveedorTwilio()
+    if provider == "meta":
+        from agent.providers.meta import MetaProvider
+        return MetaProvider()
+    elif provider == "twilio":
+        from agent.providers.twilio import TwilioProvider
+        return TwilioProvider()
     else:
-        raise ValueError(f"Unsupported provider: {proveedor}. Use: meta or twilio")
+        raise ValueError(f"Unsupported provider: {provider}. Use: meta or twilio")

@@ -30,73 +30,72 @@ class Base(DeclarativeBase):
     pass
 
 
-class Mensaje(Base):
+class Message(Base):
     """Message model in the database."""
-    __tablename__ = "mensajes"
+    __tablename__ = "messages"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    telefono: Mapped[str] = mapped_column(String(50), index=True)
+    phone: Mapped[str] = mapped_column(String(50), index=True)
     role: Mapped[str] = mapped_column(String(20))  # "user" or "assistant"
     content: Mapped[str] = mapped_column(Text)
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
-async def inicializar_db():
+async def init_db():
     """Create tables if they don't exist."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
 
-async def guardar_mensaje(telefono: str, role: str, content: str):
+async def save_message(phone: str, role: str, content: str):
     """Save a message to the conversation history."""
     async with async_session() as session:
-        mensaje = Mensaje(
-            telefono=telefono,
+        message = Message(
+            phone=phone,
             role=role,
             content=content,
             timestamp=datetime.utcnow()
         )
-        session.add(mensaje)
+        session.add(message)
         await session.commit()
 
 
-async def obtener_historial(telefono: str, limite: int = 20) -> list[dict]:
+async def get_history(phone: str, limit: int = 20) -> list[dict]:
     """
     Retrieve the last N messages of a conversation.
 
     Args:
-        telefono: The customer's phone number
-        limite: Max number of messages to retrieve (default: 20)
+        phone: The customer's phone number
+        limit: Max number of messages to retrieve (default: 20)
 
     Returns:
         List of dicts with role and content
     """
     async with async_session() as session:
         query = (
-            select(Mensaje)
-            .where(Mensaje.telefono == telefono)
-            .order_by(Mensaje.timestamp.desc())
-            .limit(limite)
+            select(Message)
+            .where(Message.phone == phone)
+            .order_by(Message.timestamp.desc())
+            .limit(limit)
         )
         result = await session.execute(query)
-        mensajes = result.scalars().all()
+        messages = list(result.scalars().all())
 
         # Reverse for chronological order (most recent come first)
-        mensajes = list(mensajes)
-        mensajes.reverse()
+        messages.reverse()
 
         return [
             {"role": msg.role, "content": msg.content}
-            for msg in mensajes
+            for msg in messages
         ]
 
 
-async def limpiar_historial(telefono: str):
+async def clear_history(phone: str):
     """Delete all history of a conversation."""
     async with async_session() as session:
-        query = select(Mensaje).where(Mensaje.telefono == telefono)
+        query = select(Message).where(Message.phone == phone)
         result = await session.execute(query)
-        mensajes = result.scalars().all()
-        for msg in mensajes:
+        messages = result.scalars().all()
+        for msg in messages:
             await session.delete(msg)
         await session.commit()
