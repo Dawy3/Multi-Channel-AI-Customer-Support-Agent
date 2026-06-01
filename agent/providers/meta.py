@@ -5,12 +5,12 @@ import os
 import logging
 import httpx
 from fastapi import Request
-from agent.providers.base import ProveedorWhatsApp, MensajeEntrante
+from agent.providers.base import WhatsAppProvider, IncomingMessage
 
 logger = logging.getLogger("agentkit")
 
 
-class ProveedorMeta(ProveedorWhatsApp):
+class MetaProvider(WhatsAppProvider):
     """WhatsApp provider using Meta's official Cloud API."""
 
     def __init__(self):
@@ -19,7 +19,7 @@ class ProveedorMeta(ProveedorWhatsApp):
         self.verify_token = os.getenv("META_VERIFY_TOKEN", "agentkit-verify")
         self.api_version = "v21.0"
 
-    async def validar_webhook(self, request: Request) -> dict | int | None:
+    async def validate_webhook(self, request: Request) -> dict | int | None:
         """Meta requires GET verification with hub.verify_token."""
         params = request.query_params
         mode = params.get("hub.mode")
@@ -30,24 +30,24 @@ class ProveedorMeta(ProveedorWhatsApp):
             return int(challenge)
         return None
 
-    async def parsear_webhook(self, request: Request) -> list[MensajeEntrante]:
+    async def parse_webhook(self, request: Request) -> list[IncomingMessage]:
         """Parse Meta Cloud API's nested payload."""
         body = await request.json()
-        mensajes = []
+        messages = []
         for entry in body.get("entry", []):
             for change in entry.get("changes", []):
                 value = change.get("value", {})
                 for msg in value.get("messages", []):
                     if msg.get("type") == "text":
-                        mensajes.append(MensajeEntrante(
-                            telefono=msg.get("from", ""),
-                            texto=msg.get("text", {}).get("body", ""),
-                            mensaje_id=msg.get("id", ""),
-                            es_propio=False,  # Meta only sends inbound messages here
+                        messages.append(IncomingMessage(
+                            phone=msg.get("from", ""),
+                            text=msg.get("text", {}).get("body", ""),
+                            message_id=msg.get("id", ""),
+                            is_own=False,  # Meta only sends inbound messages here
                         ))
-        return mensajes
+        return messages
 
-    async def enviar_mensaje(self, telefono: str, mensaje: str) -> bool:
+    async def send_message(self, phone: str, message: str) -> bool:
         """Send a message via the Meta WhatsApp Cloud API."""
         if not self.access_token or not self.phone_number_id:
             logger.warning("META_ACCESS_TOKEN or META_PHONE_NUMBER_ID not configured")
@@ -59,9 +59,9 @@ class ProveedorMeta(ProveedorWhatsApp):
         }
         payload = {
             "messaging_product": "whatsapp",
-            "to": telefono,
+            "to": phone,
             "type": "text",
-            "text": {"body": mensaje},
+            "text": {"body": message},
         }
         async with httpx.AsyncClient() as client:
             r = await client.post(url, json=payload, headers=headers)

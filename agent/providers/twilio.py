@@ -6,12 +6,12 @@ import logging
 import base64
 import httpx
 from fastapi import Request
-from agent.providers.base import ProveedorWhatsApp, MensajeEntrante
+from agent.providers.base import WhatsAppProvider, IncomingMessage
 
 logger = logging.getLogger("agentkit")
 
 
-class ProveedorTwilio(ProveedorWhatsApp):
+class TwilioProvider(WhatsAppProvider):
     """WhatsApp provider using Twilio."""
 
     def __init__(self):
@@ -19,22 +19,22 @@ class ProveedorTwilio(ProveedorWhatsApp):
         self.auth_token = os.getenv("TWILIO_AUTH_TOKEN")
         self.phone_number = os.getenv("TWILIO_PHONE_NUMBER")
 
-    async def parsear_webhook(self, request: Request) -> list[MensajeEntrante]:
+    async def parse_webhook(self, request: Request) -> list[IncomingMessage]:
         """Parse Twilio's form-encoded payload."""
         form = await request.form()
-        texto = form.get("Body", "")
-        telefono = form.get("From", "").replace("whatsapp:", "")
-        mensaje_id = form.get("MessageSid", "")
-        if not texto:
+        text = form.get("Body", "")
+        phone = form.get("From", "").replace("whatsapp:", "")
+        message_id = form.get("MessageSid", "")
+        if not text:
             return []
-        return [MensajeEntrante(
-            telefono=telefono,
-            texto=texto,
-            mensaje_id=mensaje_id,
-            es_propio=False,
+        return [IncomingMessage(
+            phone=phone,
+            text=text,
+            message_id=message_id,
+            is_own=False,
         )]
 
-    async def enviar_mensaje(self, telefono: str, mensaje: str) -> bool:
+    async def send_message(self, phone: str, message: str) -> bool:
         """Send a message via the Twilio API."""
         if not all([self.account_sid, self.auth_token, self.phone_number]):
             logger.warning("Twilio variables not configured")
@@ -44,8 +44,8 @@ class ProveedorTwilio(ProveedorWhatsApp):
         headers = {"Authorization": f"Basic {auth}"}
         data = {
             "From": f"whatsapp:{self.phone_number}",
-            "To": f"whatsapp:{telefono}",
-            "Body": mensaje,
+            "To": f"whatsapp:{phone}",
+            "Body": message,
         }
         async with httpx.AsyncClient() as client:
             r = await client.post(url, data=data, headers=headers)

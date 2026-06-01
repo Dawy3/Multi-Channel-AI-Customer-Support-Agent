@@ -12,27 +12,27 @@ from fastapi import Request
 
 
 @dataclass
-class MensajeEntrante:
+class IncomingMessage:
     """Normalized message — same shape no matter the provider."""
-    telefono: str       # Sender's phone number
-    texto: str          # Message content
-    mensaje_id: str     # Unique message ID
-    es_propio: bool     # True if the agent sent it (ignored)
+    phone: str          # Sender's phone number
+    text: str           # Message content
+    message_id: str     # Unique message ID
+    is_own: bool        # True if the agent sent it (ignored)
 
 
-class ProveedorWhatsApp(ABC):
+class WhatsAppProvider(ABC):
     """Interface every WhatsApp provider must implement."""
 
     @abstractmethod
-    async def parsear_webhook(self, request: Request) -> list[MensajeEntrante]:
+    async def parse_webhook(self, request: Request) -> list[IncomingMessage]:
         """Extract and normalize messages from the webhook payload."""
         ...
 
     @abstractmethod
-    async def enviar_mensaje(self, telefono: str, mensaje: str) -> bool:
+    async def send_message(self, phone: str, message: str) -> bool:
         """Send a text message. Returns True on success."""
         ...
 
-    async def validar_webhook(self, request: Request) -> dict | int | None:
+    async def validate_webhook(self, request: Request) -> dict | int | None:
         """GET webhook verification (only Meta needs it). Returns a response or None."""
         return None

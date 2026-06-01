@@ -13,15 +13,15 @@ import os
 # Add the project root to the path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from agent.brain import generar_respuesta
-from agent.memory import inicializar_db, guardar_mensaje, obtener_historial, limpiar_historial
+from agent.brain import generate_reply
+from agent.memory import init_db, save_message, get_history, clear_history
 
-TELEFONO_TEST = "test-local-001"
+TEST_PHONE = "test-local-001"
 
 
 async def main():
     """Main loop of the test chat."""
-    await inicializar_db()
+    await init_db()
 
     print()
     print("=" * 55)
@@ -38,35 +38,35 @@ async def main():
 
     while True:
         try:
-            mensaje = input("You: ").strip()
+            message = input("You: ").strip()
         except (EOFError, KeyboardInterrupt):
             print("\n\nTest finished.")
             break
 
-        if not mensaje:
+        if not message:
             continue
 
-        if mensaje.lower() == "exit":
+        if message.lower() == "exit":
             print("\nTest finished.")
             break
 
-        if mensaje.lower() == "clear":
-            await limpiar_historial(TELEFONO_TEST)
+        if message.lower() == "clear":
+            await clear_history(TEST_PHONE)
             print("[History cleared]\n")
             continue
 
         # Get history BEFORE saving (brain.py appends the current message)
-        historial = await obtener_historial(TELEFONO_TEST)
+        history = await get_history(TEST_PHONE)
 
         # Generate reply
         print("\nAgent: ", end="", flush=True)
-        respuesta = await generar_respuesta(mensaje, historial)
-        print(respuesta)
+        reply = await generate_reply(message, history)
+        print(reply)
         print()
 
         # Save the user's message and the agent's reply
-        await guardar_mensaje(TELEFONO_TEST, "user", mensaje)
-        await guardar_mensaje(TELEFONO_TEST, "assistant", respuesta)
+        await save_message(TEST_PHONE, "user", message)
+        await save_message(TEST_PHONE, "assistant", reply)
 
 
 if __name__ == "__main__":
