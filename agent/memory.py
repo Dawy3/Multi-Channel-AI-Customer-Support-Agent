@@ -60,7 +60,7 @@ async def save_message(phone: str, role: str, content: str):
         await session.commit()
 
 
-async def get_history(phone: str, limit: int = 20) -> list[dict]:
+async def get_history(phone: str, limit: int = 10) -> list[dict]:
     """
     Retrieve the last N messages of a conversation.
 
