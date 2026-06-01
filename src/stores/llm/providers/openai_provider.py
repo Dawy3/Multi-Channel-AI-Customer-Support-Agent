@@ -50,19 +50,22 @@ class OpenAIProvider(LLMInterface):
     def _process_text(self, text: str):
         return text[:self.defalt_input_max_char].strip()
         
-    def generate_text(self, prompt: str, chat_history: list=[], max_output_tokens: int=None, 
-                      temp: float = None ):      
+    def generate_text(self, prompt: str, chat_history: list=None, max_output_tokens: int=None,
+                      temp: float = None ):
         if not self.client:
             self.logger.error("OpenAI client was not set")
             return None
-        
+
         if not self.generation_model_id:
             self.logger.error("Generation model for OpenAI was not set")
             return None
-        
+
+        # Avoid a shared mutable default leaking history across requests/users
+        chat_history = list(chat_history) if chat_history else []
+
         max_output_tokens = max_output_tokens if max_output_tokens  else self.default_generation_max_output_tokens
         temp = temp if temp else self.default_temp
-        
+
         chat_history.append(
             self.construct_prompt(prompt, OpenAIEnums.USER.value)
         )
