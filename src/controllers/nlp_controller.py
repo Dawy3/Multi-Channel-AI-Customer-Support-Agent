@@ -190,37 +190,34 @@ class NLPController(BaseController):
 
         full_prompt = "\n\n".join([document_prompts, footer_prompt])
 
-        # Step3: messages = system prompt + last 10 (query & answers) + current user (documents + footer)
-        chat_history = (chat_history or [])[-self.app_settings.CHAT_HISTORY_MAX_MESSAGES:]
+        # Step3: keep only the last 10 turns, then send: system + history + current user (documents + footer)
+        history_window = (chat_history or [])[-self.app_settings.CHAT_HISTORY_LIMIT:]
 
         messages = [
             self.generation_client.construct_prompt(
                 role = self.generation_client.enums.SYSTEM.value,
                 prompt= system_prompt,
             )
-        ] + chat_history
+        ] + history_window
 
         answer = self.generation_client.generate_text(
             prompt = full_prompt,
             chat_history= messages
         )
 
-        # Step4: remember this turn's query and answer for the next call
-        chat_history.append(
+        # Step4: remember this turn's query and answer, then cap at the last 10 for next call
+        history_window.append(
             self.generation_client.construct_prompt(
                 role = self.generation_client.enums.USER.value,
                 prompt= query,
             )
         )
         if answer:
-            chat_history.append(
+            history_window.append(
                 self.generation_client.construct_prompt(
                     role = self.generation_client.enums.ASSISTANT.value,
                     prompt= answer,
                 )
             )
 
-        # Cap the stored history at the last 10 messages to keep RAM bounded
-        chat_history = chat_history[-self.app_settings.CHAT_HISTORY_MAX_MESSAGES:]
-
-        return answer, full_prompt, chat_history
+        return answer, full_prompt, history_window[-self.app_settings.CHAT_HISTORY_LIMIT:]

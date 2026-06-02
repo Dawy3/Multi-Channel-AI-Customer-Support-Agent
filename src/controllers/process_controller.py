@@ -5,7 +5,7 @@ from langchain_community.document_loaders import TextLoader, PyMuPDFLoader
 from models import ProcessingEnums
 from typing import List
 from dataclasses import dataclass
-from utils.pdf_loader import pdf_loader
+# from utils.pdf_loader import pdf_loader
 
 @dataclass
 class Document:
