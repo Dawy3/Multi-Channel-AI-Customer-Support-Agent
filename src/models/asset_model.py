@@ -1,7 +1,6 @@
 from .base_data_model import BaseDataModel
 from .db_schemes import Asset
 from .enums.DB_enums import DataBaseEnum
-from bson import ObjectId
 from sqlalchemy.future import select
 from sqlalchemy import func
 

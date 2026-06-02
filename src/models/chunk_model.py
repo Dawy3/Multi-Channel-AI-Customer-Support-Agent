@@ -1,6 +1,5 @@
 from .base_data_model import BaseDataModel
 from .db_schemes import DataChunk
-from bson.objectid import ObjectId
 from sqlalchemy.future import select
 from sqlalchemy import func, delete
 
@@ -41,21 +40,21 @@ class ChunkModel(BaseDataModel):
             await session.commit()
         return len(chunks)    
             
-    async def delete_chunks_by_project_id(self, project_id: ObjectId):
+    async def delete_chunks_by_project_id(self, project_id: int):
         async with self.db_client() as session:
             stmt = delete(DataChunk).where(DataChunk.chunk_project_id == project_id)
             result = await session.execute(stmt)
             await session.commit()
         return result.rowcount
             
-    async def get_project_chunks(self, project_id: ObjectId, page_number: int=1, page_size: int=50):
+    async def get_project_chunks(self, project_id: int, page_number: int=1, page_size: int=50):
         async with self.db_client() as session:
             stmt = select(DataChunk).where(DataChunk.chunk_project_id == project_id).offset((page_number -1) * page_size ).limit(page_size)
             result = await session.execute(stmt)
             records = result.scalars().all()
         return records
     
-    async def get_total_chunks(self, project_id: ObjectId):
+    async def get_total_chunks(self, project_id: int):
         total_count = 0
         async with self.db_client() as session:
             count_sql = select(func.count(DataChunk.chunk_id)).where(DataChunk.chunk_project_id == project_id)
