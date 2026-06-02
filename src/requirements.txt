@@ -15,7 +15,7 @@ SQLAlchemy==2.0.36
 asyncpg==0.30.0
 alembic==1.14.0     # Alembic basicaly turn python code data(SQLAlchemy) to tables on the DB(PostgreSQL)
 psycopg2==2.9.10    # to run Alembic
-pgvector==0.4.0
+pgvector==0.3.6
 nltk==3.9.1
 
 # Monitoring and metrics
@@ -26,7 +26,7 @@ starlette-exporter==0.23.0
 fastapi-health==0.4.0
 
 # OCR
-mistralai
-google-genai
-cv2-rgb
-pillow
+# mistralai
+# google-genai
+# cv2-rgb
+# pillow
