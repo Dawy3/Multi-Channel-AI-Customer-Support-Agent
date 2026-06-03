@@ -160,24 +160,23 @@ class NLPController(BaseController):
 
         return fused
 
-    async def answer_rag_question(self, project: Project, query: str, limit: int=10,
-                                  chat_history: list=None):
-
-        answer, full_prompt = None, None
-
+    async def answer_rag_question(self, project: Project, query: str, limit: int=10):
+        
+        answer, full_prompt, chat_history = None, None, None
+        
         # Step1: Retrieve related documents (hybrid: semantic + lexical, RRF-fused)
         retrieved_documents = await self.hybrid_search_collection(
             project=project,
             text= query,
             limit=limit,
         )
-
-        if not retrieved_documents:
-            return answer, full_prompt, None
-
+        
+        if not retrieved_documents or len(retrieved_documents) == 0:
+            return answer, full_prompt, chat_history
+        
         # Step2: Construct LLM prompt
         system_prompt = self.template_parser.get("rag", "system_prompt")
-
+        
         document_prompts = "\n".join([
             self.template_parser.get("rag", "document_prompt", {
                 "doc_num" : i + 1,
@@ -185,39 +184,21 @@ class NLPController(BaseController):
             })
             for i, doc in enumerate(retrieved_documents)
         ])
-
+        
         footer_prompt = self.template_parser.get("rag", "footer_prompt", {"query" : query})
 
-        full_prompt = "\n\n".join([document_prompts, footer_prompt])
-
-        # Step3: keep only the last 10 turns, then send: system + history + current user (documents + footer)
-        history_window = (chat_history or [])[-self.app_settings.CHAT_HISTORY_LIMIT:]
-
-        messages = [
+        chat_history = [
             self.generation_client.construct_prompt(
                 role = self.generation_client.enums.SYSTEM.value,
                 prompt= system_prompt,
             )
-        ] + history_window
-
+        ]
+        
+        full_prompt = "\n\n".join([document_prompts, footer_prompt])
+        
         answer = self.generation_client.generate_text(
             prompt = full_prompt,
-            chat_history= messages
+            chat_history= chat_history
         )
-
-        # Step4: remember this turn's query and answer, then cap at the last 10 for next call
-        history_window.append(
-            self.generation_client.construct_prompt(
-                role = self.generation_client.enums.USER.value,
-                prompt= query,
-            )
-        )
-        if answer:
-            history_window.append(
-                self.generation_client.construct_prompt(
-                    role = self.generation_client.enums.ASSISTANT.value,
-                    prompt= answer,
-                )
-            )
-
-        return answer, full_prompt, history_window[-self.app_settings.CHAT_HISTORY_LIMIT:]
+        
+        return answer, full_prompt, chat_history

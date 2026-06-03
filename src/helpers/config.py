@@ -34,8 +34,6 @@ class Settings(BaseSettings):
     GENERATION_DEFAULT_MAX_TOKENS: int = None
     GENERATION_DEFAULT_TEMPERATURE: float = None
 
-    # Max number of prior chat-history messages sent after the system prompt
-    CHAT_HISTORY_LIMIT: int = 10
     
     # ================================= OCR ============================================
     OCR_BACKEND : str            # MISTRAL or GEMENAI
