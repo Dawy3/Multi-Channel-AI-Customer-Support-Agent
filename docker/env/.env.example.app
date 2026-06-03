@@ -1,4 +1,4 @@
-APP_NAME="Billingual-RAG"
+APP_NAME="RAG"
 APP_VERSION="0.1"
 
 FILE_ALLOWED_TYPES=["text/plain", "application/pdf"] 
@@ -23,16 +23,20 @@ COHERE_API_KEY="your_cohere_api_key"
 GENERATION_MODEL_ID="gpt-4o-mini"
 EMBEDDING_MODEL_ID="embed-multilingual-light-v3.0"
 EMBEDDING_MODEL_SIZE=384
+CHAT_HISTORY_LIMIT = 10
+
 
 INPUT_DEFAULT_MAX_CHARACTERS=1024
 GENERATION_DEFAULT_MAX_TOKENS=200
 GENERATION_DEFAULT_TEMPERATURE=0.1
 
 # ================================= VectorDB Config ================================
-VECTOR_DB_BACKEND = "QDRANT"
+VECTOR_DB_BACKEND_LITERAL= ["QDRANT", "PGVECTOR"]
+VECTOR_DB_BACKEND = "PGVECTOR"     
 VECTOR_DB_PATH = "qdrant_db"
 VECTOR_DB_DISTANCE_METHOD = "cosine"
-VECTOR_DB_PGVEC_INDEX_THRESHOLD=100
+VECTOR_DB_PGVEC_INDEX_THRESHOLD=20
+
 # ================================= Template Configs ================================
 PRIMARY_LANG= "ar"
 DEFAULT_LANG = "en"
