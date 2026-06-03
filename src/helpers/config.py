@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     GENERATION_DEFAULT_MAX_TOKENS: int = None
     GENERATION_DEFAULT_TEMPERATURE: float = None
 
-    
+    CHAT_HISTORY_LIMIT: int = 10
     # ================================= OCR ============================================
     OCR_BACKEND : str            # MISTRAL or GEMENAI
     MISTRAL_API_KEY : str 

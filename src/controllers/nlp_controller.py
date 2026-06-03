@@ -160,10 +160,15 @@ class NLPController(BaseController):
 
         return fused
 
-    async def answer_rag_question(self, project: Project, query: str, limit: int=10):
-        
-        answer, full_prompt, chat_history = None, None, None
-        
+    async def answer_rag_question(self, project: Project, query: str, limit: int=10,
+                                  chat_history: list=None):
+
+        answer, full_prompt = None, None
+
+        # The conversation so far = ONLY prior user/assistant turns.
+        # (No system prompt, no documents — those are rebuilt every call.)
+        chat_history = list(chat_history) if chat_history else []
+
         # Step1: Retrieve related documents (hybrid: semantic + lexical, RRF-fused)
         retrieved_documents = await self.hybrid_search_collection(
             project=project,
@@ -187,18 +192,36 @@ class NLPController(BaseController):
         
         footer_prompt = self.template_parser.get("rag", "footer_prompt", {"query" : query})
 
-        chat_history = [
+        chat_history.append(
+            self.generation_client.construct_prompt(
+                role = self.generation_client.enums.USER.value,
+                prompt= query,
+            )
+        )
+        
+        messages = [
             self.generation_client.construct_prompt(
                 role = self.generation_client.enums.SYSTEM.value,
                 prompt= system_prompt,
             )
-        ]
+        ] + chat_history[-self.app_settings.CHAT_HISTORY_LIMIT:]
         
         full_prompt = "\n\n".join([document_prompts, footer_prompt])
         
         answer = self.generation_client.generate_text(
             prompt = full_prompt,
-            chat_history= chat_history
+            chat_history= messages,
         )
-        
-        return answer, full_prompt, chat_history
+
+        if not answer:
+            return answer, full_prompt, chat_history
+
+        # Step4: store ONLY the clean turn — raw question + raw answer — then cap.
+        chat_history.append(
+            self.generation_client.construct_prompt(
+                role = self.generation_client.enums.ASSISTANT.value,
+                prompt= answer,
+            )
+        )
+
+        return answer, full_prompt, chat_history[-self.app_settings.CHAT_HISTORY_LIMIT:]

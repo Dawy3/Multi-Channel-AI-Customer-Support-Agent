@@ -226,10 +226,11 @@ async def answer_rag(request: Request, project_id: int, search_request: SearchRe
         template_parser = request.app.template_parser,
     ) 
     
-    answer, full_prompt, chat_history = await nlp_controller.answer_rag_question(
+    answer, retrieved_documets, chat_history = await nlp_controller.answer_rag_question(
         project=project,
         query = search_request.text,
         limit = search_request.limit,
+        chat_history = [msg.model_dump() for msg in search_request.chat_history],
     )
     
     if not answer:
@@ -244,7 +245,7 @@ async def answer_rag(request: Request, project_id: int, search_request: SearchRe
             content={
                 "signal": ResponseSignals.RAG_ANSWER_SUCCESS.value,
                 "answer" : answer,
-                "full_prompt": full_prompt,
+                "retrieved_documets": retrieved_documets,
                 "chat_history" : chat_history
             }
         )
