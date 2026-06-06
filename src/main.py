@@ -1,4 +1,8 @@
+import os
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 from routes import base_router, data_router, nlp_router
 from helpers.config import get_settings
 from stores.llm.llm_provider_factory import LLMProviderFactor
@@ -11,8 +15,32 @@ from utils.metrics import setup_metrics
 
 app = FastAPI()
 
+# Allow the widget to call this API from any website it's embedded on.
+# The widget only sends JSON (no cookies), so wildcard origin is safe here.
+# To lock it down, replace ["*"] with the client's domain(s),
+# e.g. ["https://client-site.com"].
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Setup Prometheus metrics
 setup_metrics(app)
+
+# Serve the chat widget + demo page so the UI works as soon as the server runs.
+# static/ and test-website.html live at the project root (one level above src/).
+PROJECT_ROOT = os.path.dirname(os.path.dirname(__file__))
+STATIC_DIR = os.path.join(PROJECT_ROOT, "static")
+DEMO_PAGE = os.path.join(PROJECT_ROOT, "test-website.html")
+
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+@app.get("/", include_in_schema=False)
+async def serve_widget_demo():
+    return FileResponse(DEMO_PAGE)
 
 async def startup_span():
     settings = get_settings()
