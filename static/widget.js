@@ -416,6 +416,16 @@
     }
     if (!cfg.apiUrl) cfg.apiUrl = detectApiUrl();
 
+    // Expose a handle for quick testing from the browser console, e.g.:
+    //   RagWidget.projectId = 2     // next message queries project 2
+    window.RagWidget = {
+      config: cfg,
+      get projectId() { return cfg.projectId; },
+      set projectId(v) { cfg.projectId = parseInt(v, 10) || cfg.projectId; },
+      get limit() { return cfg.limit; },
+      set limit(v) { cfg.limit = parseInt(v, 10) || cfg.limit; },
+    };
+
     injectStyles(cfg);
     buildWidget(cfg);
 
