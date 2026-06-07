@@ -20,7 +20,7 @@ nltk==3.9.1
 
 # Monitoring and metrics
 prometheus-client==0.21.1
-starlette-exporter==0.23.0
+prometheus-fastapi-instrumentator==7.0.0
 
 # Health checks
 fastapi-health==0.4.0

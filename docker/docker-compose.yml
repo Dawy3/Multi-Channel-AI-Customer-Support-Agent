@@ -3,7 +3,7 @@ services:
   fastapi:
     build:
       context: ..
-      dockerfile: docker/minirag/Dockerfile
+      dockerfile: docker/rag_system/Dockerfile
     container_name: fastapi
     ports:
       - "8000:8000"
@@ -104,6 +104,32 @@ services:
       - backend
     restart: always
 
+  # Loki -> like Prometheus, but for logs (stores them, queried via LogQL in Grafana)
+  loki:
+    image: grafana/loki:3.0.0
+    container_name: loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - loki_data:/loki
+    networks:
+      - backend
+    restart: always
+
+  # Promtail -> agent that reads container stdout/stderr and ships it to Loki
+  promtail:
+    image: grafana/promtail:3.0.0
+    container_name: promtail
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./promtail/promtail-config.yaml:/etc/promtail/config.yaml
+    command: -config.file=/etc/promtail/config.yaml
+    depends_on:
+      - loki
+    networks:
+      - backend
+    restart: always
+
   # Node Exporter for system metrics: Host Machine(e.g., CPU, memory, disk, network stats)
   node-exporter:
     image: prom/node-exporter:v1.9.1
@@ -118,7 +144,7 @@ services:
       - '--path.procfs=/host/proc'
       - '--path.rootfs=/rootfs'
       - '--path.sysfs=/host/sys'
-      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'   # Regex
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc|run|mnt/wsl|rootfs)($$|/)'   # Regex
     networks:
       - backend
     restart: always
@@ -148,3 +174,4 @@ volumes:
   qdrant_data:
   prometheus_data:
   grafana_data:
+  loki_data:
