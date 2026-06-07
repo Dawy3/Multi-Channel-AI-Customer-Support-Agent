@@ -6,10 +6,10 @@ FILE_MAX_SIZE=10
 FILE_DEFAULT_CHUNK_SIZE=512000 # 512KB
 
 POSTGRES_USERNAME="postgres"
-POSTGRES_PASSWORD="minirag2222"
+POSTGRES_PASSWORD="postgres_password"
 POSTGRES_HOST="localhost"
 POSTGRES_PORT=5432
-POSTGRES_MAIN_DATABASE="minirag"
+POSTGRES_MAIN_DATABASE="rag_system"
 
 # ================================= LLM Config ================================
 GENERATION_BACKEND = "OPENAI"
