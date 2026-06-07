@@ -21,14 +21,19 @@ COPY src/requirements.txt .
 RUN uv pip install -r requirements.txt --system
 
 # Take all the src file
-COPY src/ . 
+COPY src/ .
+
+# Chat widget assets + demo page live at the project root (outside src/).
+# main.py resolves these to /static and /test-website.html inside the container.
+COPY static/ /static/
+COPY test-website.html /test-website.html
 
 # Create directory structure for Alembic
 RUN mkdir -p /app/models/db_schemes/rag/
 
-COPY docker/minirag/alembic.ini /app/models/db_schemes/rag/alembic.ini
+COPY docker/rag_system/alembic.ini /app/models/db_schemes/rag/alembic.ini
 
-COPY docker/minirag/entrypoint.sh /entrypoint.sh
+COPY docker/rag_system/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 ENTRYPOINT [ "/entrypoint.sh" ]
