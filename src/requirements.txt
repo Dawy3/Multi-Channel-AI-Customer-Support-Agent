@@ -26,7 +26,7 @@ prometheus-fastapi-instrumentator==7.0.0
 fastapi-health==0.4.0
 
 # OCR
-# mistralai
-# google-genai
-# cv2-rgb
-# pillow
+mistralai==1.10.0
+google-genai==1.47.0
+cv2-rgb==1.0.0          # thin RGB wrapper; pulls in opencv-python + numpy
+pillow==11.3.0          # last release supporting Python 3.9

@@ -73,11 +73,11 @@
 #             futures = {
 #                 executor.submit(
 #                     self._process_page_data,
-#                     page_num,
-#                     decoded_blocks,
-#                     raster,
-#                     total_pages,
-#                     pdf_meta,
+#                     page_num=page_num,
+#                     total_pages=total_pages,
+#                     pdf_meta=pdf_meta,
+#                     decoded_blocks=decoded_blocks,
+#                     raster=raster,
 #                 ): page_index
 #                 for page_index, (page_num, decoded_blocks, raster) in enumerate(page_data_list)
 #             }
