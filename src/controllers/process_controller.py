@@ -92,7 +92,7 @@ class ProcessController(BaseController):
                 
                 current_chunk = ""
                 
-        if len(current_chunk) >= 0:
+        if current_chunk.strip():
             chunks.append(Document(
                 page_content=current_chunk.strip(),
                 metadata={}

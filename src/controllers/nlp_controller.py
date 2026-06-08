@@ -3,6 +3,9 @@ from models.db_schemes import Project, DataChunk, RetrievedDocument
 from stores.llm.llm_enums import DocumentTypeEnum
 from typing import List
 import json
+import logging
+
+logger = logging.getLogger('uvicorn.error')
 
 class NLPController(BaseController):
 
@@ -37,9 +40,20 @@ class NLPController(BaseController):
         collection_name = self.create_collection_name(project_id=project.project_id)
         
         # Step2: Mange Items
-        texts = [ c.chunk_text for c in chunks]
-        metadata = [c.chunk_metadata for c in chunks]
-        
+        # Skip empty/whitespace chunks: OpenAI embeddings rejects empty strings.
+        # Keep texts, metadata and ids aligned by filtering them together.
+        valid_items = [
+            (c.chunk_text, c.chunk_metadata, chunk_id)
+            for c, chunk_id in zip(chunks, chunks_ids)
+            if c.chunk_text and c.chunk_text.strip()
+        ]
+
+        if not valid_items:
+            logger.warning("No non-empty chunks to index, skipping")
+            return True
+
+        texts, metadata, chunks_ids = map(list, zip(*valid_items))
+
         vectors = self.embedding_client.embed_text(text=texts, document_type=DocumentTypeEnum.DOCUMENT.value)
         
         # Step3: Create collection if not exists
