@@ -5,7 +5,7 @@
 
 ##  Overview
 
-This system ingests PDF, text, and image documents (images are processed with OCR) and exposes a conversational Q&A API. 
+This system ingests PDF and text documents (with OCR providers available for images / scanned documents), indexes them into a vector database, and exposes a conversational Q&A API. Retrieval is **hybrid** — it combines semantic vector search with lexical full-text search and fuses the two rankings — so answers stay grounded even when the user's wording doesn't match the document's wording.
 
 ---
 
@@ -13,14 +13,45 @@ This system ingests PDF, text, and image documents (images are processed with OC
 
 | Feature | Details |
 |---|---|
-| **Multi-LLM Support** | OpenAI GPT + Cohere + LLama — switchable via environment config |
+| **Hybrid Retrieval** | Semantic (vector) **+** lexical (PostgreSQL full-text) search, fused with Reciprocal Rank Fusion (RRF) |
+| **Multi-LLM Support** | OpenAI GPT + Cohere — switchable via environment config |
 | **Dual Vector DB** | Qdrant (local/embedded) or PgVector (PostgreSQL) — provider-agnostic interface |
-| **Bilingual** | Prompt templates in English 🇬🇧 and Arabic 🇸🇦 with auto language detection |
-| **OCR Support** | Image ingestion with OCR (Tesseract locally or AWS Textract in cloud deployments) to extract text from PNG/JPG/TIFF |
-| **Production Observability** | Prometheus metrics + Grafana dashboards for request counts, latency, DB stats |
-| **AWS Deployment** | CI/CD via GitHub Actions with separate `develop` and `main` pipelines |
+| **Conversational Memory** | Multi-turn chat history carried per request and capped via `CHAT_HISTORY_LIMIT` |
+| **Multilingual** | Prompt templates in English 🇬🇧, Arabic 🇸🇦 and Spanish 🇪🇸 with auto language detection |
+| **OCR Support** | Pluggable OCR providers (Google Gemini, Mistral) for extracting text from images / scanned docs |
+| **Full Observability** | Prometheus metrics (incl. p50 / p95 / p99 latency) + Grafana dashboards, plus Loki + Promtail log aggregation |
+| **AWS Deployment** | CI/CD via GitHub Actions (`deploy-main.yml`) to AWS |
 | **Database Migrations** | Alembic-managed PostgreSQL schema with full version history |
 | **Async Throughout** | Full async FastAPI + SQLAlchemy + asyncpg stack for high concurrency |
+
+---
+
+##  Application Workflow
+
+The system runs in two phases: an **ingestion** pipeline that turns raw files into a searchable index, and a **retrieval** pipeline that answers questions against that index.
+
+### 1. Ingestion (build the knowledge base)
+
+```
+Upload ──> Process ──> Index
+```
+
+1. **Upload** (`POST /api/v1/data/upload/{project_id}`) — the file is validated (type/size), given a unique name, written to disk, and recorded as an `asset` row. Each `project_id` is an isolated namespace.
+2. **Process** (`POST /api/v1/data/process/{project_id}`) — the file is loaded (PDF via PyMuPDF, TXT via TextLoader; images via an OCR provider), split into overlapping text **chunks**, and the chunks are stored in PostgreSQL.
+3. **Index** (`POST /api/v1/nlp/index/push/{project_id}`) — chunks are embedded (OpenAI / Cohere) and written to the vector collection in batches. On PgVector, an HNSW vector index is built once the collection passes a size threshold, and a `tsvector` column + GIN index are maintained for full-text search.
+
+### 2. Retrieval (answer a question)
+
+```
+Query ──> Hybrid Search (semantic + lexical) ──> RRF fusion ──> Prompt build ──> LLM ──> Answer
+```
+
+1. **Hybrid search** — the query is embedded and run as a **vector** similarity search, *and* the raw query is run as a **full-text** search (`plainto_tsquery` / `ts_rank`) over the same collection.
+2. **RRF fusion** — the two ranked lists are merged with **Reciprocal Rank Fusion** (`score = Σ 1 / (k + rank)`, `k = 60`), matching documents across lists by `chunk_id`. This favours chunks that rank well in *both* signals.
+3. **Prompt assembly** — the top fused chunks become the document context; a system prompt + the recent chat history (capped by `CHAT_HISTORY_LIMIT`) + a footer carrying the question are assembled.
+4. **Generation** — the LLM produces the answer, which is appended to the chat history and returned along with the retrieved documents.
+
+> `POST /api/v1/nlp/index/search` exposes pure semantic search and `POST /api/v1/nlp/index/hybrid_search` exposes the fused retrieval directly, so you can inspect what the RAG step retrieves before generation.
 
 ---
 
