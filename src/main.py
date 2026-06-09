@@ -16,9 +16,6 @@ from utils.metrics import setup_metrics
 app = FastAPI()
 
 # Allow the widget to call this API from any website it's embedded on.
-# The widget only sends JSON (no cookies), so wildcard origin is safe here.
-# To lock it down, replace ["*"] with the client's domain(s),
-# e.g. ["https://client-site.com"].
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -31,7 +28,6 @@ app.add_middleware(
 setup_metrics(app)
 
 # Serve the chat widget + demo page so the UI works as soon as the server runs.
-# static/ and test-website.html live at the project root (one level above src/).
 PROJECT_ROOT = os.path.dirname(os.path.dirname(__file__))
 STATIC_DIR = os.path.join(PROJECT_ROOT, "static")
 DEMO_PAGE = os.path.join(PROJECT_ROOT, "test-website.html")

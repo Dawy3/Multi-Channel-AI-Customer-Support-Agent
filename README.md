@@ -19,7 +19,7 @@ This system ingests PDF and text documents (with OCR providers available for ima
 | **Conversational Memory** | Multi-turn chat history carried per request and capped via `CHAT_HISTORY_LIMIT` |
 | **Multilingual** | Prompt templates in English 🇬🇧, Arabic 🇸🇦 and Spanish 🇪🇸 with auto language detection |
 | **OCR Support** | Pluggable OCR providers (Google Gemini, Mistral) for extracting text from images / scanned docs |
-| **Full Observability** | Prometheus metrics (incl. p50 / p95 / p99 latency) + Grafana dashboards, plus Loki + Promtail log aggregation |
+| **Full Observability** | Prometheus metrics (incl. p50 / p95 / p99 latency) + Grafana dashboards |
 | **AWS Deployment** | CI/CD via GitHub Actions (`deploy-main.yml`) to AWS |
 | **Database Migrations** | Alembic-managed PostgreSQL schema with full version history |
 | **Async Throughout** | Full async FastAPI + SQLAlchemy + asyncpg stack for high concurrency |
@@ -66,7 +66,12 @@ Query ──> Hybrid Search (semantic + lexical) ──> RRF fusion ──> Prom
 **AI / ML**
 - [OpenAI API](https://platform.openai.com/) — GPT generation + embeddings
 - [Cohere API](https://cohere.com/) — generation + embeddings with RAG-native document support
-- OCR: Tesseract (local) and AWS Textract (cloud) — optional image ingestion and text extraction
+- OCR providers: [Google Gemini](https://ai.google.dev/) and [Mistral](https://mistral.ai/) — optional image / scanned-document text extraction
+
+**Retrieval**
+- Semantic search — vector similarity (cosine) over embeddings
+- Lexical search — PostgreSQL full-text (`tsvector` + GIN index, `ts_rank`)
+- Fusion — Reciprocal Rank Fusion (RRF) to blend both rankings
 
 **Vector Databases**
 - [Qdrant](https://qdrant.tech/) — lightweight embedded vector store
@@ -75,8 +80,8 @@ Query ──> Hybrid Search (semantic + lexical) ──> RRF fusion ──> Prom
 **Infrastructure**
 - [Docker Compose](https://docs.docker.com/compose/) — full local environment
 - [Nginx](https://nginx.org/) — reverse proxy
-- [Prometheus](https://prometheus.io/) + [Grafana](https://grafana.com/) — monitoring
-- [GitHub Actions](https://github.com/features/actions) — CI/CD pipelines
+- [Prometheus](https://prometheus.io/) + [Grafana](https://grafana.com/) — metrics & dashboards
+- [GitHub Actions](https://github.com/features/actions) — CI/CD pipeline
 
 ---
 
@@ -142,17 +147,18 @@ API docs available at: **http://localhost:8000/docs**
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `POST` | `/app/v2/data/upload/{project_id}` | Upload a PDF, TXT, or image document (PNG/JPG/TIFF) |
-| `POST` | `/app/v2/data/process/{project_id}` | Chunk, OCR (if image), and store document content |
+| `POST` | `/api/v1/data/upload/{project_id}` | Upload a PDF or TXT document (images via OCR providers) |
+| `POST` | `/api/v1/data/process/{project_id}` | Chunk document content and store chunks in PostgreSQL |
 
 ### NLP / RAG Endpoints
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `POST` | `/app/v2/nlp/index/push/{project_id}` | Embed chunks and push to vector DB |
-| `GET` | `/app/v2/nlp/index/info/{project_id}` | Get vector collection metadata |
-| `POST` | `/app/v2/nlp/index/search/{project_id}` | Semantic similarity search |
-| `POST` | `/app/v2/nlp/index/answer/{project_id}` | Full RAG answer generation |
+| `POST` | `/api/v1/nlp/index/push/{project_id}` | Embed chunks and push to the vector DB |
+| `GET` | `/api/v1/nlp/index/info/{project_id}` | Get vector collection metadata |
+| `POST` | `/api/v1/nlp/index/search/{project_id}` | Semantic (vector) similarity search |
+| `POST` | `/api/v1/nlp/index/hybrid_search/{project_id}` | Hybrid search — vector + full-text, RRF-fused |
+| `POST` | `/api/v1/nlp/index/answer/{project_id}` | Full RAG answer generation (hybrid retrieval + LLM) |
 
 ### RAG DEMO 
 
@@ -175,6 +181,18 @@ Access the observability stack after running Docker Compose:
 | **Grafana** | http://localhost:3000 | admin / see `.env.grafana` |
 | **Prometheus** | http://localhost:9090 | — |
 | **Qdrant UI** | http://localhost:6333/dashboard | — |
+
+The stack also runs **node-exporter** (host metrics) and **postgres-exporter** (DB metrics), both scraped by Prometheus.
+
+### Metrics
+
+The FastAPI app exposes Prometheus metrics via a custom middleware (scrape path configured in `docker/prometheus/prometheus.yml`). Request latency is recorded as a histogram, so latency **percentiles** are computed at query time in Grafana, e.g. P95:
+
+```promql
+histogram_quantile(0.95, sum(rate(http_requests_duration_seconds_bucket[$__rate_interval])) by (le))
+```
+
+Swap `0.95` for `0.50` or `0.99` to get P50 / P99.
 
 ### Recommended Grafana Dashboards
 
@@ -219,24 +237,24 @@ alembic downgrade -1
 ```
 ├── src/
 │   ├── main.py                    # FastAPI app entry point
-│   ├── contoroller/               # Business logic layer
-│   │   ├── nlp_contoroller.py     # RAG pipeline orchestration
-│   │   ├── process_contoroller.py # Document chunking
-│   │   └── data_contoroller.py    # File validation & storage
+│   ├── controllers/               # Business logic layer
+│   │   ├── nlp_controller.py      # RAG pipeline: hybrid search + RRF + answer
+│   │   ├── process_controller.py  # Document loading & chunking
+│   │   └── data_controller.py     # File validation & storage
 │   ├── stores/
-│   │   ├── LLM/                   # OpenAI + Cohere providers
-│   │   │   └── OCR/               # OCR helpers (Tesseract / Textract)
-│   │   └── vectorDB/              # Qdrant + PgVector providers
+│   │   ├── llm/                   # OpenAI + Cohere providers + prompt templates (en/ar/es)
+│   │   ├── ocr/                   # OCR providers (Gemini, Mistral)
+│   │   └── vectorDB/             # Qdrant + PgVector providers (vector + full-text search)
 │   ├── models/
-│   │   ├── db_schemes/            # SQLAlchemy models + Alembic
+│   │   ├── db_schemes/            # SQLAlchemy models + Alembic migrations
 │   │   └── enums/                 # Response signals, processing types
-│   ├── Routers/                   # FastAPI route definitions
+│   ├── routes/                    # FastAPI route definitions (base / data / nlp)
 │   └── utils/
 │       └── metrics.py             # Prometheus middleware
 └── docker/
     ├── docker-compose.yml
-    ├── nginx/
-    └── Prometheus/
+    ├── nginx/                     # reverse proxy config
+    └── prometheus/               # scrape config
 ```
 
 ---
