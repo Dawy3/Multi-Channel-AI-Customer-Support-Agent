@@ -1,31 +1,47 @@
-from fastapi import FastAPI
-from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+from fastapi import FastAPI, Request, Response
+from starlette.middleware.base import BaseHTTPMiddleware
+import time
 
-# Path Prometheus scrapes. Must match `metrics_path` in
-# docker/prometheus/prometheus.yml for the `fastapi` job.
-METRICS_PATH = "/TheNchy135_Dawy_Test_Metrics"
+# Define metrics
+REQUEST_COUNT = Counter("http_requests_total", "Total HTTP Requests", ["method", 'endpoint', "status"])
+# Buckets (seconds) span fast endpoints up to slow LLM/RAG calls, so p95/p99
+# don't collapse into the +Inf bucket. histogram_quantile in Grafana
+# interpolates within these boundaries.
+REQUEST_LATENCY = Histogram(
+    "http_requests_duration_seconds",
+    "HTTP Request Latency",
+    ["method", "endpoint"],
+    buckets=(0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 3, 5, 8, 13, 21, 34, float("inf")),
+)
+
+class PrometheusMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        
+        start_time = time.time()
+        
+        # Process the request
+        response = await call_next(request)
+        
+        # Record metrics after request is processed
+        duration = time.time() - start_time
+        endpoint = request.url.path
+        
+        REQUEST_COUNT.labels(method=request.method, endpoint=endpoint, status=response.status_code).inc()
+        REQUEST_LATENCY.labels(method=request.method, endpoint= endpoint).observe(duration)
+        
+        return response 
 
 
 def setup_metrics(app: FastAPI):
     """
-    Instrument the app with prometheus-fastapi-instrumentator.
-
-    This emits the standard metric names the community "FastAPI Observability"
-    dashboard (Grafana ID 16110) expects, e.g.:
-      - http_requests_total{handler, method, status}
-      - http_request_duration_seconds_bucket{handler, method}
-      - http_request_duration_highr_seconds_bucket
-
-    Latency is labeled by `handler` (the route template, e.g.
-    /api/v1/nlp/index/answer/{project_id}) instead of the raw URL path, which
-    avoids creating a new time-series per project id (high cardinality).
+    Setup Prometheus metrics middleware and endpoint
     """
-    Instrumentator(
-        should_group_status_codes=False,    # keep exact codes (200, 400, 404, ...)
-        should_ignore_untemplated=False,    # still record unmatched paths (404s)
-        excluded_handlers=[METRICS_PATH],   # don't measure the scrape endpoint itself
-    ).instrument(app).expose(
-        app,
-        endpoint=METRICS_PATH,
-        include_in_schema=False,
-    )
+    # Add Prometheus middleware
+    app.add_middleware(PrometheusMiddleware)
+    
+    @app.get("/TheNchy135_Dawy_Test_Metrics", include_in_schema=False)
+    def metrics():
+        return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+        
+        
