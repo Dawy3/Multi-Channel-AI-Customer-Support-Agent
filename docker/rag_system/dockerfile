@@ -31,7 +31,7 @@ COPY test-website.html /test-website.html
 # Create directory structure for Alembic
 RUN mkdir -p /app/models/db_schemes/rag/
 
-COPY docker/rag_system/alembic.ini /app/models/db_schemes/rag/alembic.ini
+COPY docker/rag_system/alembic.example.ini /app/models/db_schemes/rag/alembic.ini
 
 COPY docker/rag_system/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
