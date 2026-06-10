@@ -584,22 +584,40 @@
           }
         );
 
-        const data = await response.json().catch(function () { return null; });
-        removeTypingIndicator();
-
-        if (!response.ok || !data || data.signal !== "rag_answer_success" || !data.answer) {
+        if (!response.ok || !response.body) {
+          removeTypingIndicator();
           addBotMessage("Sorry, I couldn't find an answer to that. Please try rephrasing.");
           return;
         }
 
-        addBotMessage(data.answer);
-        uiMessages.push({ role: "bot", text: data.answer });
+        // The server streams the answer as plain text — render tokens as they arrive.
+        removeTypingIndicator();
+        const botBody = addBotMessage("");
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let answer = "";
 
-        // The server returns the full updated conversation (incl. this turn),
-        // already capped to the history limit — reuse it verbatim next time.
-        if (Array.isArray(data.chat_history)) {
-          chatHistory = data.chat_history;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          answer += decoder.decode(value, { stream: true });
+          botBody.innerHTML = renderMarkdown(answer);
+          scrollDown();
         }
+
+        if (!answer.trim()) {
+          botBody.innerHTML = renderMarkdown(
+            "Sorry, I couldn't find an answer to that. Please try rephrasing."
+          );
+          return;
+        }
+
+        uiMessages.push({ role: "bot", text: answer });
+
+        // The stream carries only the answer text, so keep the conversation
+        // in sync on the client (the server re-caps history each request).
+        chatHistory.push({ role: "user", content: text });
+        chatHistory.push({ role: "assistant", content: answer });
         saveHistory(uiMessages, chatHistory);
       } catch (err) {
         console.error("[RAG Widget]", err);
