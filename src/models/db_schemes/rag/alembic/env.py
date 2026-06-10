@@ -1,3 +1,4 @@
+import os
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
@@ -9,6 +10,20 @@ from alembic import context
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
+
+# Prefer the DB connection from environment variables (Railway / Docker inject
+# these), falling back to the sqlalchemy.url in alembic.ini for local runs.
+if os.getenv("POSTGRES_HOST"):
+    config.set_main_option(
+        "sqlalchemy.url",
+        "postgresql://{user}:{password}@{host}:{port}/{db}".format(
+            user=os.getenv("POSTGRES_USERNAME"),
+            password=os.getenv("POSTGRES_PASSWORD"),
+            host=os.getenv("POSTGRES_HOST"),
+            port=os.getenv("POSTGRES_PORT"),
+            db=os.getenv("POSTGRES_MAIN_DATABASE"),
+        ),
+    )
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
