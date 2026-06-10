@@ -17,7 +17,9 @@ class VectorDBFactory:
                 db_client= qdrant_db_client,
                 default_vector_size= self.config.EMBEDDING_MODEL_SIZE,
                 distance_method = self.config.VECTOR_DB_DISTANCE_METHOD,
-                index_threshold= self.config.VECTOR_DB_PGVEC_INDEX_THRESHOLD
+                index_threshold= self.config.VECTOR_DB_PGVEC_INDEX_THRESHOLD,
+                url= self.config.QDRANT_URL,
+                api_key= self.config.QDRANT_API_KEY
             )
             
         if provider == VectordbEnums.PGVECTOR.value:

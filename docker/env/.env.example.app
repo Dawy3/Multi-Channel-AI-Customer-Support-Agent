@@ -34,7 +34,10 @@ VECTOR_DB_BACKEND_LITERAL= ["QDRANT", "PGVECTOR"]
 VECTOR_DB_BACKEND = "PGVECTOR"     
 VECTOR_DB_PATH = "qdrant_db"
 VECTOR_DB_DISTANCE_METHOD = "cosine"
-VECTOR_DB_PGVEC_INDEX_THRESHOLD=20
+VECTOR_DB_PGVEC_INDEX_THRESHOLD=100
+
+QDRANT_URL=
+QDRANT_API_KEY=
 
 # ================================= Template Configs ================================
 PRIMARY_LANG= "ar"

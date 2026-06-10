@@ -41,10 +41,13 @@ class Settings(BaseSettings):
     GEMENAI_API_KEY : str
     
     # ================================= VectorDB Config ================================
-    VECTOR_DB_BACKEND: str 
-    VECTOR_DB_PATH: str 
+    VECTOR_DB_BACKEND: str
+    VECTOR_DB_PATH: str
     VECTOR_DB_DISTANCE_METHOD: str = None
     VECTOR_DB_PGVEC_INDEX_THRESHOLD: int = 100
+    # Qdrant Cloud (leave unset to use local embedded Qdrant at VECTOR_DB_PATH)
+    QDRANT_URL: str = None
+    QDRANT_API_KEY: str = None
     # ================================= Template Configs ================================
     PRIMARY_LANG: str
     DEFAULT_LANG: str 

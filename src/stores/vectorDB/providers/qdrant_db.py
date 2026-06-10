@@ -8,10 +8,13 @@ from typing import List
 class QdrantDB(VectorDBInterface):
 
     def __init__(self, db_client, default_vector_size: int = 786,
-                distance_method: str= None, index_threshold: int = 100):
+                distance_method: str= None, index_threshold: int = 100,
+                url: str = None, api_key: str = None):
 
         self.client = None
         self.db_client = db_client
+        self.url = url
+        self.api_key = api_key
         self.distance_method = None
         self.default_vector_size = default_vector_size
         # Payload key under which chunk text is stored (see insert_many)
@@ -27,7 +30,12 @@ class QdrantDB(VectorDBInterface):
         self.logger = logging.getLogger("uvicorn")
         
     async def connect(self):
-        self.client = QdrantClient(path=self.db_client)
+        # Qdrant Cloud (or any remote server) when a URL is provided,
+        # otherwise fall back to the local embedded store at db_client path.
+        if self.url:
+            self.client = QdrantClient(url=self.url, api_key=self.api_key)
+        else:
+            self.client = QdrantClient(path=self.db_client)
         
     async def disconnect(self):
         self.client = None
