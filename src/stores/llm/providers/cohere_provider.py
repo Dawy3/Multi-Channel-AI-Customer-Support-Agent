@@ -67,11 +67,36 @@ class CohereProvider(LLMInterface):
         if not response or not response.text:
             self.logger.error("Error while generating text with CoHere")
             return None
-        
+
         return response.text
-     
-            
-    
+
+    def generate_text_stream(self, prompt: str, chat_history: list=[], max_output_tokens: int=None,
+                             temp: float = None ):
+        if not self.client:
+            self.logger.error("CoHere client was not set")
+            return
+
+        if not self.generation_model_id:
+            self.logger.error("Generation model for CoHere was not set")
+            return
+
+        max_output_tokens = max_output_tokens if max_output_tokens  else self.default_generation_max_output_tokens
+        temp = temp if temp else self.default_temp
+
+        stream = self.client.chat_stream(
+            model = self.generation_model_id,
+            chat_history = chat_history,
+            message = self.construct_prompt(prompt),
+            temperature = temp,
+            max_tokens = max_output_tokens
+        )
+
+        for event in stream:
+            if event.event_type == "text-generation" and event.text:
+                yield event.text
+
+
+
     def embed_text(self, text: Union[str, List[str]], document_type: str = None):
         if not self.client:
             self.logger.error("CoHere client was not set")
