@@ -1,5 +1,5 @@
 from fastapi import APIRouter, status, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from .shcemes.nlp_schema import PushRequestSchema, SearchRequestSchema
 from models.project_model import ProjectModel
 from models.chunk_model import ChunkModel
@@ -226,26 +226,14 @@ async def answer_rag(request: Request, project_id: int, search_request: SearchRe
         template_parser = request.app.template_parser,
     ) 
     
-    answer, retrieved_documets, chat_history = await nlp_controller.answer_rag_question(
+    answer_stream = nlp_controller.answer_rag_question_stream(
         project=project,
         query = search_request.text,
         limit = search_request.limit,
         chat_history = [msg.model_dump() for msg in search_request.chat_history],
     )
-    
-    if not answer:
-        return JSONResponse(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            content={
-                "signal": ResponseSignals.RAG_ANSWER_ERROR.value
-            }
-        )
-    
-    return JSONResponse(
-            content={
-                "signal": ResponseSignals.RAG_ANSWER_SUCCESS.value,
-                "answer" : answer,
-                "retrieved_documets": retrieved_documets,
-                "chat_history" : chat_history
-            }
-        )
+
+    return StreamingResponse(
+        answer_stream,
+        media_type="text/plain",
+    )

@@ -239,3 +239,54 @@ class NLPController(BaseController):
         )
 
         return answer, full_prompt, chat_history[-self.app_settings.CHAT_HISTORY_LIMIT:]
+
+    async def answer_rag_question_stream(self, project: Project, query: str, limit: int=10,
+                                         chat_history: list=None):
+
+        chat_history = list(chat_history) if chat_history else []
+
+        # Step1: Retrieve related documents (hybrid: semantic + lexical, RRF-fused)
+        retrieved_documents = await self.hybrid_search_collection(
+            project=project,
+            text= query,
+            limit=limit,
+        )
+
+        if not retrieved_documents or len(retrieved_documents) == 0:
+            return
+
+        # Step2: Construct LLM prompt
+        system_prompt = self.template_parser.get("rag", "system_prompt")
+
+        document_prompts = "\n".join([
+            self.template_parser.get("rag", "document_prompt", {
+                "doc_num" : i + 1,
+                "chunk_text": self.generation_client._process_text(doc.text),
+            })
+            for i, doc in enumerate(retrieved_documents)
+        ])
+
+        footer_prompt = self.template_parser.get("rag", "footer_prompt", {"query" : query})
+
+        chat_history.append(
+            self.generation_client.construct_prompt(
+                role = self.generation_client.enums.USER.value,
+                prompt= query,
+            )
+        )
+
+        messages = [
+            self.generation_client.construct_prompt(
+                role = self.generation_client.enums.SYSTEM.value,
+                prompt= system_prompt,
+            )
+        ] + chat_history[-self.app_settings.CHAT_HISTORY_LIMIT:]
+
+        full_prompt = "\n\n".join([document_prompts, footer_prompt])
+
+        # Step3: Stream the answer tokens straight to the caller
+        for chunk in self.generation_client.generate_text_stream(
+            prompt = full_prompt,
+            chat_history= messages,
+        ):
+            yield chunk

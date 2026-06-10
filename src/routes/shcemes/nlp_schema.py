@@ -10,5 +10,5 @@ class ChatMessage(BaseModel):
 
 class SearchRequestSchema(BaseModel):
     text: str
-    limit: Optional[int] = 5
+    limit: Optional[int] = 10
     chat_history: Optional[List[ChatMessage]] = []
